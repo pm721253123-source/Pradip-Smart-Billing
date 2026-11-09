@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pradip Mahata Smart Billing</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;
+ background:#eef2f7;
+ color:#172337;
+ font-family:Arial,sans-serif;
+}
+header{
+ background:#10263e;
+ color:white;
+ padding:20px;
+ text-align:center;
+}
+header h2{margin:0;color:#54e1c5}
+header p{margin:7px 0 0;color:#d0dbe8}
+.container{max-width:1000px;margin:auto;padding:15px}
+.card{
+ background:white;
+ padding:17px;
+ border-radius:14px;
+ margin-bottom:15px;
+ box-shadow:0 3px 14px #0000000c;
+}
+h3{color:#087f75;margin-top:0}
+input,select{
+ width:100%;
+ padding:12px;
+ margin:7px 0;
+ border:1px solid #d4dce5;
+ border-radius:8px;
+ font-size:15px;
+}
+button{
+ border:0;
+ border-radius:8px;
+ padding:12px 16px;
+ background:#087f75;
+ color:white;
+ font-size:15px;
+ cursor:pointer;
+ margin:4px 2px;
+}
+.secondary{background:#344b64}
+.danger{background:#c0392b}
+table{width:100%;border-collapse:collapse;min-width:520px}
+th,td{padding:10px;border-bottom:1px solid #e2e7ed;text-align:left}
+th{background:#edf5f5}
+.table-wrap{overflow-x:auto}
+.total{text-align:right;font-size:19px;line-height:2}
+.total strong{color:#087f75}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#invoice{display:none}
+@media(max-width:550px){.row{grid-template-columns:1fr}}
+@media print{
+ @page{size:A4;margin:15mm}
+ body{background:white}
+ header,.container,.no-print{display:none!important}
+ #invoice{display:block!important}
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h2>PRADIP MAHATA</h2>
+<p>SMART BILLING & MANAGEMENT SYSTEM</p>
+</header>
+
+<div class="container">
+
+<div class="card">
+<h3>নতুন বিল তৈরি করুন</h3>
+
+<div class="row">
+<div>
+<label>Invoice Number</label>
+<input id="invoiceNo" readonly>
+</div>
+<div>
+<label>তারিখ</label>
+<input id="billDate" type="date">
+</div>
+</div>
+
+<h3>Customer Details</h3>
+<div class="row">
+<input id="customer" placeholder="ক্রেতার নাম">
+<input id="mobile" placeholder="মোবাইল নম্বর" type="tel">
+</div>
+<input id="address" placeholder="ক্রেতার ঠিকানা">
+
+</div>
+
+<div class="card">
+<h3>পণ্য যোগ করুন</h3>
+<input id="product" placeholder="পণ্যের নাম">
+
+<div class="row">
+<input id="qty" type="number" min="0" step="any" placeholder="পরিমাণ">
+<input id="rate" type="number" min="0" step="any" placeholder="একক দাম ₹">
+</div>
+
+<button onclick="addItem()">+ পণ্য যোগ করুন</button>
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>পণ্যের নাম</th>
+<th>পরিমাণ</th>
+<th>দাম</th>
+<th>মোট</th>
+<th>মুছুন</th>
+</tr>
+</thead>
+<tbody id="items"></tbody>
+</table>
+</div>
+</div>
+
+<div class="card">
+<h3>বিলের হিসাব</h3>
+<div class="row">
+<div>
+<label>Discount (₹)</label>
+<input id="discount" type="number" min="0" value="0" oninput="calculate()">
+</div>
+<div>
+<label>GST (%)</label>
+<input id="gst" type="number" min="0" value="0" oninput="calculate()">
+</div>
+</div>
+
+<div class="total">
+<div>Subtotal: ₹<span id="subtotal">0.00</span></div>
+<div>GST: ₹<span id="gstAmount">0.00</span></div>
+<div>Discount: ₹<span id="discountAmount">0.00</span></div>
+<strong>Grand Total: ₹<span id="grandTotal">0.00</span></strong>
+</div>
+
+<div class="row">
+<div>
+<label>Paid Amount (₹)</label>
+<input id="paid" type="number" min="0" value="0" oninput="calculate()">
+</div>
+<div>
+<label>Due Amount (₹)</label>
+<input id="due" readonly>
+</div>
+</div>
+</div>
+
+<div class="card no-print">
+<h3>বিল তৈরি ও প্রিন্ট</h3>
+<button onclick="previewBill()">Preview Bill</button>
+<button onclick="saveBill()" class="secondary">Save Bill</button>
+<button onclick="printBill()">A4 Print</button>
+<button onclick="downloadPDF()" class="secondary">Save PDF</button>
+</div>
+
+</div>
+
+<div id="invoice"></div>
+
+<script>
+let products=[];
+
+function nextInvoice(){
+let n=Number(localStorage.getItem("pmInvoice")||0)+1;
+document.getElementById("invoiceNo").value="PM-"+String(n).padStart(4,"0");
+}
+
+function addItem(){
+let name=document.getElementById("product").value.trim();
+let qty=Number(document.getElementById("qty").value);
+let rate=Number(document.getElementById("rate").value);
+
+if(!name||!document.getElementById("qty").value||
+!document.getElementById("rate").value||
+!Number.isFinite(qty)||!Number.isFinite(rate)||qty<=0||rate<0){
+alert("সঠিক পণ্যের নাম, পরিমাণ ও দাম লিখুন");
+return;
+}
+
+products.push({name,qty,rate});
+document.getElementById("product").value="";
+document.getElementById("qty").value="";
+document.getElementById("rate").value="";
+renderItems();
+}
+
+function renderItems(){
+let html="";
+products.forEach((p,i)=>{
+html+=`<tr>
+<td>${safe(p.name)}</td>
+<td>${p.qty}</td>
+<td>₹${p.rate.toFixed(2)}</td>
+<td>₹${(p.qty*p.rate).toFixed(2)}</td>
+<td><button class="danger" onclick="removeItem(${i})">X</button></td>
+</tr>`;
+});
+document.getElementById("items").innerHTML=html;
+calculate();
+}
+
+function safe(s){
+return String(s).replace(/[&<>"']/g,c=>({
+"&":"&amp;","<":"&lt;",">":"&gt;",
+'"':"&quot;","'":"&#39;"
+}[c]));
+}
+
+function removeItem(i){
+products.splice(i,1);
+renderItems();
+}
+
+function calculate(){
+let subtotal=products.reduce((s,p)=>s+p.qty*p.rate,0);
+let discount=Math.max(0,Number(document.getElementById("discount").value)||0);
+let gstRate=Math.max(0,Number(document.getElementById("gst").value)||0);
+let taxable=Math.max(0,subtotal-discount);
+let gst=taxable*gstRate/100;
+let total=taxable+gst;
+let paid=Math.max(0,Number(document.getElementById("paid").value)||0);
+
+document.getElementById("subtotal").innerText=subtotal.toFixed(2);
+document.getElementById("gstAmount").innerText=gst.toFixed(2);
+document.getElementById("discountAmount").innerText=discount.toFixed(2);
+document.getElementById("grandTotal").innerText=total.toFixed(2);
+document.getElementById("due").value=Math.max(0,total-paid).toFixed(2);
+}
+
+function billHTML(){
+calculate();
+let no=document.getElementById("invoiceNo").value;
+let date=document.getElementById("billDate").value;
+let customer=document.getElementById("customer").value;
+let mobile=document.getElementById("mobile").value;
+let address=document.getElementById("address").value;
+let rows=products.map(p=>`
+<tr>
+<td>${safe(p.name)}</td>
+<td>${p.qty}</td>
+<td>₹${p.rate.toFixed(2)}</td>
+<td>₹${(p.qty*p.rate).toFixed(2)}</td>
+</tr>`).join("");
+
+return `
+<div style="font-family:Arial;color:#111;padding:20px">
+<center>
+<h1>PRADIP MAHATA</h1>
+<h2>SALES INVOICE / CASH MEMO</h2>
+<p>Customer Purchase Receipt</p>
+</center>
+<hr>
+<p><b>Invoice:</b> ${safe(no)}
+&nbsp;&nbsp; <b>Date:</b> ${safe(date)}</p>
+<p><b>Customer:</b> ${safe(customer)}
+&nbsp;&nbsp; <b>Mobile:</b> ${safe(mobile)}</p>
+<p><b>Address:</b> ${safe(address)}</p>
+<table style="width:100%;border-collapse:collapse">
+<thead><tr>
+<th style="border:1px solid;padding:9px">Product</th>
+<th style="border:1px solid;padding:9px">Qty</th>
+<th style="border:1px solid;padding:9px">Rate</th>
+<th style="border:1px solid;padding:9px">Amount</th>
+</tr></thead>
+<tbody>${rows}</tbody>
+</table>
+<div style="text-align:right;line-height:2;margin-top:15px">
+Subtotal: ₹${document.getElementById("subtotal").innerText}<br>
+GST: ₹${document.getElementById("gstAmount").innerText}<br>
+Discount: ₹${document.getElementById("discountAmount").innerText}<br>
+<h2>Grand Total: ₹${document.getElementById("grandTotal").innerText}</h2>
+Paid: ₹${(Number(document.getElementById("paid").value)||0).toFixed(2)}<br>
+Due: ₹${document.getElementById("due").value}
+</div>
+<br><br>
+<p>Customer Signature: __________________</p>
+<p style="text-align:right">Authorized Signature: __________________</p>
+<center><p>Thank You For Your Purchase!</p></center>
+</div>`;
+}
+
+function previewBill(){
+if(!products.length){alert("প্রথমে পণ্য যোগ করুন");return;}
+document.getElementById("invoice").innerHTML=billHTML();
+document.getElementById("invoice").style.display="block";
+document.getElementById("invoice").scrollIntoView();
+}
+
+function printBill(){
+if(!products.length){alert("প্রথমে পণ্য যোগ করুন");return;}
+document.getElementById("invoice").innerHTML=billHTML();
+window.print();
+}
+
+function downloadPDF(){
+printBill();
+}
+
+function saveBill(){
+if(!products.length){alert("প্রথমে পণ্য যোগ করুন");return;}
+let data={
+invoice:document.getElementById("invoiceNo").value,
+date:document.getElementById("billDate").value,
+customer:document.getElementById("customer").value,
+mobile:document.getElementById("mobile").value,
+products:products,
+total:document.getElementById("grandTotal").innerText
+};
+let history=JSON.parse(localStorage.getItem("pmBills")||"[]");
+history.push(data);
+localStorage.setItem("pmBills",JSON.stringify(history));
+localStorage.setItem("pmInvoice",String(Number(localStorage.getItem("pmInvoice")||0)+1));
+alert("বিল সেভ হয়েছে!");
+}
+
+document.getElementById("billDate").value=
+new Date().toISOString().slice(0,10);
+nextInvoice();
+</script>
+
+</body>
+</html>
